@@ -1,0 +1,28 @@
+
+name: Build APK
+
+"on":
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find project ZIP
+        run: |
+          find . -type f -name 'tipid_cart_android_project.zip'
+
+      - name: Check project files
+        run: |
+          ls -la
+          find . -maxdepth 3 -name pubspec.yaml
+          

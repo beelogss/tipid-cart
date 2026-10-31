@@ -1,0 +1,60 @@
+
+name: Build subayBUYan APK
+
+"on":
+  push:
+    paths:
+      - "subaybuyan_android_project_v1_1.zip"
+      - ".github/workflows/subaybuyan-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Extract app source
+        run: unzip -o subaybuyan_android_project_v1_1.zip -d source
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android project
+        working-directory: source/tipid_cart_android_project
+        run: flutter create --platforms=android --org com.subaybuyan .
+
+      - name: Set app display name
+        working-directory: source/tipid_cart_android_project
+        run: sed -i 's/android:label="tipid_cart"/android:label="subayBUYan"/' android/app/src/main/AndroidManifest.xml
+
+      - name: Get dependencies
+        working-directory: source/tipid_cart_android_project
+        run: flutter pub get
+
+      - name: Build debug APK
+        working-directory: source/tipid_cart_android_project
+        run: flutter build apk --debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: subaybuyan-apk
+          path: source/tipid_cart_android_project/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
+          

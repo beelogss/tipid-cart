@@ -1,0 +1,72 @@
+name: Build subayBUY APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'subayBUY_source.zip'
+      - '.github/workflows/subayBUY-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Extract subayBUY source
+        run: unzip -o subayBUY_source.zip -d source
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android project
+        working-directory: source/tipid_cart_android_project
+        run: flutter create --platforms=android --org com.subaybuyan .
+
+      - name: Set Android app display name
+        working-directory: source/tipid_cart_android_project
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          import re
+          s, n = re.subn(r'android:label="[^"]*"', 'android:label="subayBUY"', s, count=1)
+          if n == 0:
+              raise SystemExit('Could not find android:label in AndroidManifest.xml')
+          p.write_text(s)
+          PY
+
+      - name: Get dependencies
+        working-directory: source/tipid_cart_android_project
+        run: flutter pub get
+
+      - name: Build debug APK
+        working-directory: source/tipid_cart_android_project
+        run: flutter build apk --debug
+
+      - name: Rename APK to subayBUY.apk
+        working-directory: source/tipid_cart_android_project
+        run: cp build/app/outputs/flutter-apk/app-debug.apk build/app/outputs/flutter-apk/subayBUY.apk
+
+      - name: Upload subayBUY APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: subayBUY-apk
+          path: source/tipid_cart_android_project/build/app/outputs/flutter-apk/subayBUY.apk
+          if-no-files-found: error
+          retention-days: 7
+          

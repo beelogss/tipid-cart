@@ -1,0 +1,111 @@
+name: Build subayBUY APK v1.3.0
+
+"on":
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'subayBUY_branded_source_v1.3.0.zip'
+      - '.github/workflows/subayBUY-build-v1.3.0.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Extract subayBUY v1.3.0 source
+        run: unzip -o subayBUY_branded_source_v1.3.0.zip -d source
+
+      - name: Generate Android project and retain existing app ID
+        working-directory: source/tipid_cart_android_project
+        run: flutter create --platforms=android --org com.subaybuyan .
+
+      - name: Remove Flutter starter test and use a self-contained analyzer config
+        working-directory: source/tipid_cart_android_project
+        run: |
+          rm -f test/widget_test.dart
+          cat > analysis_options.yaml <<'EOF'
+          analyzer:
+            exclude:
+              - build/**
+          EOF
+
+      - name: Set Android app display name
+        working-directory: source/tipid_cart_android_project
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          text, count = re.subn(r'android:label="[^"]*"', 'android:label="subayBUY"', text, count=1)
+          if count != 1:
+              raise SystemExit('Could not set android:label in AndroidManifest.xml')
+          manifest.write_text(text)
+          PY
+
+      - name: Get Flutter dependencies
+        working-directory: source/tipid_cart_android_project
+        run: flutter pub get
+
+      - name: Verify brand assets
+        working-directory: source/tipid_cart_android_project
+        run: |
+          test -s assets/subaybuy_logo.png
+          test -s assets/subaybuy_app_icon.png
+          test -s lib/wishlist_screen.dart
+
+      - name: Generate Android launcher icons
+        working-directory: source/tipid_cart_android_project
+        run: |
+          dart run flutter_launcher_icons
+          for density in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            test -s "android/app/src/main/res/mipmap-${density}/ic_launcher.png"
+          done
+
+      - name: Run unit tests
+        working-directory: source/tipid_cart_android_project
+        run: flutter test
+
+      - name: Analyze Flutter source
+        working-directory: source/tipid_cart_android_project
+        run: flutter analyze
+
+      - name: Build arm64 debug APK
+        working-directory: source/tipid_cart_android_project
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Verify APK output
+        working-directory: source/tipid_cart_android_project
+        run: |
+          APK=build/app/outputs/flutter-apk/app-debug.apk
+          test -s "$APK"
+          cp "$APK" build/app/outputs/flutter-apk/subayBUY.apk
+          test -s build/app/outputs/flutter-apk/subayBUY.apk
+          ls -lh build/app/outputs/flutter-apk/subayBUY.apk
+
+      - name: Upload subayBUY APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: subayBUY-apk-v1.3.0
+          path: source/tipid_cart_android_project/build/app/outputs/flutter-apk/subayBUY.apk
+          if-no-files-found: error
+          retention-days: 7
